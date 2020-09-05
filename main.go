@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"regexp"
-	"strings"
 	"syscall"
 
 	"golang.org/x/crypto/ssh/terminal"
@@ -44,13 +43,15 @@ func main() {
 	signal.Notify(endChan, os.Interrupt)
 
 	go endCheck(endChan, pc, addr)
-	go Listen(pc)
 
 	fmt.Print("Please type your name: \t")
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Scan()
 	name = scanner.Text()
+
 	clearConsole()
+	go Listen(pc)
+
 	pc.WriteTo([]byte(name+" has joined the chat..."), addr)
 	fmt.Println("To exit the chat, type 'exit' or use ctrl-C")
 
@@ -88,7 +89,7 @@ func Listen(pc net.PacketConn) {
 		if err != nil {
 			panic(err)
 		}
-		if n != 0 && strings.Contains(string(buf), ":") {
+		if n != 0 {
 			//fmt.Println(strings.TrimSuffix(addr.String(), ":8000") + ": " + string(buf))
 			fmt.Println(string(buf))
 		}

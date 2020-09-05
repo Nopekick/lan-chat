@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 	"os"
@@ -12,6 +13,8 @@ import (
 
 	"golang.org/x/crypto/ssh/terminal"
 )
+
+var name string = "Default"
 
 func main() {
 	cmd := "ifconfig | grep netmask"
@@ -40,17 +43,26 @@ func main() {
 	endChan := make(chan os.Signal)
 	signal.Notify(endChan, os.Interrupt)
 
-	go endCheck(endChan, pc)
+	go endCheck(endChan, pc, addr)
 	go Listen(pc)
 
+	fmt.Print("Please type your name: \t")
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Scan()
+	name = scanner.Text()
+	clearConsole()
+	pc.WriteTo([]byte(name+" has joined the chat..."), addr)
+	fmt.Println("To exit the chat, type 'exit' or use ctrl-C")
+
 	for {
-		bytePassword, _ := terminal.ReadPassword(int(syscall.Stdin))
-		if string(bytePassword) == "exit" {
+		bytePW, _ := terminal.ReadPassword(int(syscall.Stdin))
+		if string(bytePW) == "exit" {
+			pc.WriteTo([]byte(name+" has left the chat..."), addr)
 			exec.Command("stty echo").Run()
 			os.Exit(0)
 		}
-		if string(bytePassword) != "" {
-			_, err2 := pc.WriteTo([]byte(string(bytePassword)), addr)
+		if string(bytePW) != "" {
+			_, err2 := pc.WriteTo([]byte(name+": "+string(bytePW)), addr)
 			if err2 != nil {
 				panic(err2)
 			}
@@ -58,12 +70,12 @@ func main() {
 	}
 }
 
-func endCheck(endChan chan os.Signal, pc net.PacketConn) {
+func endCheck(endChan chan os.Signal, pc net.PacketConn, addr *net.UDPAddr) {
 	select {
 	case sig := <-endChan:
+		pc.WriteTo([]byte(name+" has left the chat..."), addr)
+		fmt.Printf("Leaving chat *%s*\n", sig)
 		exec.Command("stty echo").Run()
-		pc.Close()
-		fmt.Printf("<<%s>> Leaving chat...\n", sig)
 		os.Exit(0)
 	}
 }
@@ -71,13 +83,20 @@ func endCheck(endChan chan os.Signal, pc net.PacketConn) {
 func Listen(pc net.PacketConn) {
 	for {
 		buf := make([]byte, 1024)
-		n, addr, err := pc.ReadFrom(buf)
+		n, _, err := pc.ReadFrom(buf)
 
 		if err != nil {
 			panic(err)
 		}
-		if n != 0 {
-			fmt.Println(strings.TrimSuffix(addr.String(), ":8000") + ": " + string(buf))
+		if n != 0 && strings.Contains(string(buf), ":") {
+			//fmt.Println(strings.TrimSuffix(addr.String(), ":8000") + ": " + string(buf))
+			fmt.Println(string(buf))
 		}
 	}
+}
+
+func clearConsole() {
+	cm := exec.Command("clear") //Linux example, its tested
+	cm.Stdout = os.Stdout
+	cm.Run()
 }
